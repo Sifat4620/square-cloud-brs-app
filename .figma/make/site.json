@@ -1,0 +1,10 @@
+{
+  "description": "Streamline daily infrastructure monitoring and monthly backup verification with a comprehensive reporting system designed for IT administrators and managers.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

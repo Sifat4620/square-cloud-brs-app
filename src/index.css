@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --surface2: #f8fafc;
+  --border: #e2e8f0;
+  --border2: #cbd5e1;
+  --text: #0f172a;
+  --text2: #334155;
+  --text3: #64748b;
+  --text4: #94a3b8;
+  --primary: #2563eb;
+  --primary-light: #eff6ff;
+  --primary-border: #bfdbfe;
+  --sidebar: #111827;
+  --sidebar-border: #1f2937;
+  --sidebar-hover: #1f2937;
+  --sidebar-active: rgba(37, 99, 235, 0.15);
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+input,
+select,
+textarea {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11px;
+  }
+  .no-print {
+    display: none !important;
+  }
+  aside,
+  header {
+    display: none !important;
+  }
+  .print-page {
+    padding: 0 !important;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  th,
+  td {
+    border: 1px solid #ddd !important;
+    padding: 5px 8px !important;
+    color: black !important;
+    background: white !important;
+  }
+  .print-card {
+    border: 1px solid #ddd !important;
+    background: white !important;
+    margin-bottom: 14px;
+    page-break-inside: avoid;
+    padding: 12px !important;
+  }
+  /* Report modal print: show report body, hide chrome */
+  .fixed.inset-0 > div {
+    position: static !important;
+    max-height: none !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: 100% !important;
+  }
+  /* Hide modal header/footer chrome, show only report body */
+  .fixed.inset-0 > div > div:first-child,
+  .fixed.inset-0 > div > div:nth-child(2),
+  .fixed.inset-0 > div > div:last-child {
+    display: none !important;
+  }
+  .fixed.inset-0 > div > div.flex-1 {
+    overflow: visible !important;
+  }
+}
