@@ -34,6 +34,15 @@ export default defineConfig(({ mode }) => {
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
       watch: { ignored: ['**/.figma/**'] },
+      // Proxy the SPA's /api calls to the Laravel backend so the browser
+      // stays on the same origin it already reaches (avoids the WSL/Windows
+      // localhost split where the browser's localhost isn't this box's).
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+      },
     },
     preview: {
       host: '0.0.0.0',
