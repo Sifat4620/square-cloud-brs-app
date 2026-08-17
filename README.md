@@ -8,12 +8,12 @@ A web application for **daily infrastructure monitoring** and **monthly backup v
 
 ## Overview
 
-The app is a single-page **React + Vite** tool with **no backend and no database**. Every record — DSRs, backup tests, clients, users, and the auth session — lives in the browser's `localStorage`. It is designed to run:
+The app is a **React + Vite** single-page frontend backed by a **Laravel API** (in `backend/`) and a **MySQL** database. DSRs, backup tests, clients, users, and the auth session are stored server-side; the SPA talks to the API over HTTP (see `src/api.ts`). It runs:
 
-- **Inside Figma Make** (the design/preview surface), or
-- **Standalone** via `vite dev` / `vite build` + `vite preview`.
+- **Standalone** via `vite dev` (frontend) + `php artisan serve` (API), or
+- **Inside Figma Make** (design/preview surface) when wired to a hosted API.
 
-Because there is no server, all data is per-browser and per-device. This makes it ideal as a single-operator reporting tool or a prototype; sharing data between machines would require adding a backend.
+Run `./setup.sh` after cloning to install dependencies, create `backend/.env`, and migrate + seed the database.
 
 ---
 
@@ -232,6 +232,19 @@ square-cloud-brs-app/
 │       ├── ClientMgmt.tsx      # Client CRUD (admin)
 │       └── UserMgmt.tsx        # User CRUD + access control (admin)
 └── (built output goes to dist/)
+
+backend/                      # Laravel API (square-laravel/brs-api)
+├── app/                     # Controllers, Models, Auth (Sanctum)
+├── config/                  # Laravel configuration
+├── database/
+│   ├── migrations/          # DSRs, backups, clients, users, tokens
+│   ├── seeders/             # DatabaseSeeder (17 clients + admin)
+│   └── mysql-init.sql       # CREATE DATABASE / USER for local setup
+├── routes/api.php           # /api/login, /api/me, /api/dsrs, ...
+├── .env.example             # MySQL config template (copy → .env)
+├── artisan
+├── composer.json
+└── composer.lock
 ```
 
 ---
@@ -241,16 +254,29 @@ square-cloud-brs-app/
 ### Prerequisites
 - Node.js 22+ and pnpm (or npm)
 
-### Install & Run
+### Install & Run (full app: frontend + API)
+
+After cloning:
 
 ```bash
-pnpm install
-pnpm dev
+./setup.sh          # installs deps, creates backend/.env, migrates + seeds
 ```
 
-The dev server starts on `0.0.0.0` and defaults to port **8443** (`vite.config.ts`: `port: parseInt(process.env.PORT || '8443')`, `strictPort: true` — so if 8443 is taken the dev server errors rather than switching ports). Override with `PORT=xxxx pnpm dev`. Open the printed/local URL in your browser.
+Then start both servers in two terminals:
 
-> Inside Figma Make a dev server is already running on `$PORT`; you don't need to start it manually.
+```bash
+# Terminal 1 — Laravel API on :8000
+cd backend && php artisan serve --host 0.0.0.0 --port 8000
+
+# Terminal 2 — React SPA on :8443 (proxies /api → :8000)
+VITE_API_URL=/api pnpm dev
+```
+
+Open **http://localhost:8443/** and log in with `admin` / `Admin@2025`.
+
+- The SPA fetches the API at `VITE_API_URL` (defaults to `http://localhost:8000/api`; set to `/api` so Vite proxies it same-origin — recommended when the browser and servers are on different machines, e.g. WSL).
+- The dev server binds `0.0.0.0` on port **8443** (`strictPort: true` — it errors rather than switching if 8443 is taken). Override with `PORT=xxxx pnpm dev`.
+- First run requires a MySQL database + user; see `backend/database/mysql-init.sql`.
 
 ### Build
 

@@ -3,6 +3,9 @@ dist/
 build/
 .cache/
 .env*
+# Re-include example env files so clones have a template to copy from.
+!.env.example
+!**/.env.example
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
