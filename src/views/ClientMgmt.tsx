@@ -1,41 +1,65 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { getClients, upsertClient } from '../store'
+import { ApiError } from '../api'
 import type { Client } from '../types'
 
 export default function ClientMgmt() {
-  const [clients, setClients] = useState<Client[]>(() => getClients())
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [newName, setNewName] = useState('')
   const [showAdd, setShowAdd] = useState(false)
 
-  const activeCount = useMemo(() => clients.filter(c => c.active).length, [clients])
-  const refresh = () => setClients(getClients())
+  const refresh = useCallback(() => {
+    setLoading(true)
+    getClients()
+      .then(list => { setClients(list); setError('') })
+      .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load clients.'))
+      .finally(() => setLoading(false))
+  }, [])
 
-  const handleAdd = () => {
+  useEffect(() => { refresh() }, [refresh])
+
+  const activeCount = useMemo(() => clients.filter(c => c.active).length, [clients])
+
+  const handleAdd = async () => {
     const name = newName.trim()
     if (!name) return
-    upsertClient({ id: crypto.randomUUID(), name, active: true, createdAt: new Date().toISOString().split('T')[0] })
-    refresh()
-    setNewName('')
-    setShowAdd(false)
+    try {
+      await upsertClient({ id: crypto.randomUUID(), name, active: true, createdAt: new Date().toISOString().split('T')[0] })
+      setNewName('')
+      setShowAdd(false)
+      refresh()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to add client.')
+    }
   }
 
-  const handleSaveEdit = (id: string) => {
+  const handleSaveEdit = async (id: string) => {
     const name = editName.trim()
     if (!name) return
     const c = clients.find(c => c.id === id)
     if (!c) return
-    upsertClient({ ...c, name })
-    refresh()
-    setEditId(null)
+    try {
+      await upsertClient({ ...c, name })
+      setEditId(null)
+      refresh()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to save client.')
+    }
   }
 
-  const handleToggle = (id: string) => {
+  const handleToggle = async (id: string) => {
     const c = clients.find(c => c.id === id)
     if (!c) return
-    upsertClient({ ...c, active: !c.active })
-    refresh()
+    try {
+      await upsertClient({ ...c, active: !c.active })
+      refresh()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to update client.')
+    }
   }
 
   const inputBase: React.CSSProperties = {
@@ -51,6 +75,14 @@ export default function ClientMgmt() {
 
   return (
     <div className="p-6 max-w-3xl space-y-6">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ backgroundColor: '#fff1f2', border: '1px solid #fecdd3', color: '#dc2626' }}>
+          {error}
+        </div>
+      )}
+      {loading && (
+        <p className="text-xs" style={{ color: 'var(--text4)', fontFamily: "'DM Mono', monospace" }}>Loading clients…</p>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

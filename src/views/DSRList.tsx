@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { getDSRs, deleteDSR, MONTHS, YEARS } from '../store'
+import { ApiError } from '../api'
 import type { Route } from '../App'
 import type { DSR, DSRState } from '../types'
 import logoSrc from '@/imports/logocloud_upscaled.png'
@@ -326,8 +327,19 @@ export default function DSRList({ onNavigate, isAdmin }: Props) {
   const [stateFilter, setStateFilter] = useState('all')
   const [showReport, setShowReport] = useState(false)
   const [tick, setTick] = useState(0)
+  const [all, setAll] = useState<DSR[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const all = useMemo(() => getDSRs(), [tick])
+  const refresh = useCallback(() => {
+    setLoading(true)
+    getDSRs()
+      .then(list => { setAll(list); setError('') })
+      .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load DSRs.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh, tick])
 
   const todayDsr = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -358,7 +370,8 @@ export default function DSRList({ onNavigate, isAdmin }: Props) {
   const handleDelete = (id: string) => {
     if (!confirm('Delete this DSR?')) return
     deleteDSR(id)
-    setTick(t => t + 1)
+      .then(() => setTick(t => t + 1))
+      .catch(err => alert(err instanceof ApiError ? err.message : 'Failed to delete DSR.'))
   }
 
   const selCls = 'rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors'
@@ -366,6 +379,11 @@ export default function DSRList({ onNavigate, isAdmin }: Props) {
 
   return (
     <div className="p-6 space-y-6">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ backgroundColor: '#fff1f2', border: '1px solid #fecdd3', color: '#dc2626' }}>
+          {error}
+        </div>
+      )}
       {showReport && <ReportModal dsrs={filtered} onClose={() => setShowReport(false)} />}
 
       {/* Today's report */}

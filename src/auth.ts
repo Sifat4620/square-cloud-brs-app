@@ -1,4 +1,11 @@
-// ── Page keys ─────────────────────────────────────────────────────────────────
+// ── Auth & session (API-backed) ────────────────────────────────────────────────
+// Login/session now live on the Laravel backend (Sanctum). This module keeps the
+// client-side pieces the UI needs: the page catalogue, the access guard, and a
+// thin session wrapper stored in localStorage (the token is held by ./api).
+
+import * as api from './api'
+
+// ── Page keys ───────────────────────────────────────────────────────────────────
 export type PageKey =
   | 'dsr-list'
   | 'dsr-form'
@@ -23,19 +30,7 @@ export const PAGE_DEFS: PageDef[] = [
   { key: 'clients',     label: 'Client Management',           desc: 'Add, edit and manage backup-test clients',      group: 'Admin' },
 ]
 
-// ── Dynamic user model (stored in localStorage) ───────────────────────────────
-export interface AppUser {
-  id: string
-  username: string
-  password: string
-  displayName: string
-  roleName: string   // e.g. "NOC Engineer", "Manager"
-  pages: PageKey[]
-  active: boolean
-  createdAt: string
-}
-
-// ── Auth session (what is kept in memory / sessionStorage) ───────────────────
+// ── Auth session shape returned by the API ───────────────────────────────────────
 export interface AuthSession {
   id: string
   username: string
@@ -45,79 +40,10 @@ export interface AuthSession {
   pages: PageKey[]
 }
 
-// ── Storage keys ──────────────────────────────────────────────────────────────
+// ── Storage key for the in-memory session (token is in ./api) ────────────────────
 const SESSION_KEY = 'srs_auth_v2'
-const USERS_KEY   = 'srs_users_v1'
 
-// ── User CRUD ─────────────────────────────────────────────────────────────────
-export function getAppUsers(): AppUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY)
-    return raw ? (JSON.parse(raw) as AppUser[]) : []
-  } catch {
-    return []
-  }
-}
-
-export function saveAppUsers(users: AppUser[]): void {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users))
-}
-
-export function upsertAppUser(user: AppUser): void {
-  const all = getAppUsers()
-  const idx = all.findIndex(u => u.id === user.id)
-  if (idx >= 0) all[idx] = user
-  else all.push(user)
-  saveAppUsers(all)
-}
-
-export function deleteAppUser(id: string): void {
-  saveAppUsers(getAppUsers().filter(u => u.id !== id))
-}
-
-// ── Auth operations ───────────────────────────────────────────────────────────
-const ADMIN_CREDENTIALS = { username: 'admin', password: 'Admin@2025' }
-
-export function login(username: string, password: string): AuthSession | null {
-  const u = username.trim().toLowerCase()
-  const p = password
-
-  // Built-in admin
-  if (u === ADMIN_CREDENTIALS.username && p === ADMIN_CREDENTIALS.password) {
-    const session: AuthSession = {
-      id: 'admin',
-      username: 'admin',
-      displayName: 'Administrator',
-      roleName: 'Admin',
-      isAdmin: true,
-      pages: PAGE_DEFS.map(d => d.key),
-    }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-    return session
-  }
-
-  // Dynamic users
-  const match = getAppUsers().find(
-    au => au.username.toLowerCase() === u && au.password === p && au.active,
-  )
-  if (!match) return null
-
-  const session: AuthSession = {
-    id: match.id,
-    username: match.username,
-    displayName: match.displayName,
-    roleName: match.roleName,
-    isAdmin: false,
-    pages: match.pages,
-  }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  return session
-}
-
-export function logout(): void {
-  localStorage.removeItem(SESSION_KEY)
-}
-
+// ── Session helpers ───────────────────────────────────────────────────────────────
 export function getStoredSession(): AuthSession | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
@@ -127,7 +53,43 @@ export function getStoredSession(): AuthSession | null {
   }
 }
 
-/** Helper: does this session have access to a given page? */
+function setStoredSession(session: AuthSession | null): void {
+  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  else localStorage.removeItem(SESSION_KEY)
+}
+
+// ── Auth operations ───────────────────────────────────────────────────────────────
+export async function login(username: string, password: string): Promise<AuthSession> {
+  const { token, user } = await api.login(username.trim(), password)
+  api.setToken(token)
+  setStoredSession(user)
+  return user
+}
+
+/**
+ * Rehydrate the session at app boot. If a token is present we ask the API for
+ * the current user (so an expired/revoked token bounces the user to login).
+ */
+export async function restoreSession(): Promise<AuthSession | null> {
+  if (!api.getToken()) return null
+  try {
+    const user = await api.me()
+    setStoredSession(user)
+    return user
+  } catch {
+    api.clearToken()
+    setStoredSession(null)
+    return null
+  }
+}
+
+export async function logout(): Promise<void> {
+  await api.logout()
+  api.clearToken()
+  setStoredSession(null)
+}
+
+// ── Access control (client-side UX guard; the server also enforces it) ───────────
 export function canAccess(session: AuthSession, page: PageKey): boolean {
   if (session.isAdmin) return true
   return session.pages.includes(page)

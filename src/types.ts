@@ -5,8 +5,8 @@ export type TestStatus  = 'OK' | 'FAILED' | 'PENDING' | 'N/A'
 
 export interface StatusField {
   status: DSRStatus
-  value: string
-  remarks: string
+  value: string | null
+  remarks: string | null
 }
 
 export interface DSR {
@@ -80,9 +80,9 @@ export interface Client {
 export interface BackupEntry {
   clientId: string
   clientName: string
-  logsStatus: string
+  logsStatus: string | null
   testStatus: TestStatus
-  remarks: string
+  remarks: string | null
 }
 
 export interface BackupTest {
@@ -97,4 +97,15 @@ export interface BackupTest {
   entries: BackupEntry[]
   createdAt: string
   updatedAt: string
+}
+
+/** A user managed via the admin User Management screen (no password in the list). */
+export interface ManagedUser {
+  id: string
+  username: string
+  displayName: string
+  roleName: string
+  pages: string[]
+  active: boolean
+  createdAt: string
 }

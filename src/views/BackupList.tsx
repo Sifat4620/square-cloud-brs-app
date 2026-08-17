@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { getBackups, deleteBackup, MONTHS, YEARS } from '../store'
+import { ApiError } from '../api'
 import type { Route } from '../App'
 import type { BackupTest, BackupState, TestStatus } from '../types'
 
@@ -377,8 +378,19 @@ export default function BackupList({ onNavigate, isAdmin }: Props) {
   const [stateFilter, setStateFilter] = useState('all')
   const [showReport, setShowReport] = useState(false)
   const [tick, setTick] = useState(0)
+  const [all, setAll] = useState<BackupTest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const all = useMemo(() => getBackups(), [tick])
+  const refresh = useCallback(() => {
+    setLoading(true)
+    getBackups()
+      .then(list => { setAll(list); setError('') })
+      .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load backup tests.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh, tick])
 
   const filtered = useMemo(() =>
     all
@@ -401,7 +413,8 @@ export default function BackupList({ onNavigate, isAdmin }: Props) {
   const handleDelete = (id: string) => {
     if (!confirm('Delete this backup test? This cannot be undone.')) return
     deleteBackup(id)
-    setTick(t => t + 1)
+      .then(() => setTick(t => t + 1))
+      .catch(err => alert(err instanceof ApiError ? err.message : 'Failed to delete backup test.'))
   }
 
   const selCls = 'rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors'
@@ -409,6 +422,11 @@ export default function BackupList({ onNavigate, isAdmin }: Props) {
 
   return (
     <div className="p-6 space-y-6">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ backgroundColor: '#fff1f2', border: '1px solid #fecdd3', color: '#dc2626' }}>
+          {error}
+        </div>
+      )}
       {showReport && <ReportModal all={all} onClose={() => setShowReport(false)} />}
 
       <div className="grid grid-cols-4 gap-4">

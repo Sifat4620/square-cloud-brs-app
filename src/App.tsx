@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { getStoredSession, logout as authLogout, canAccess } from './auth'
+import { useState, useEffect } from 'react'
+import { getStoredSession, logout as authLogout, canAccess, restoreSession } from './auth'
 import type { AuthSession } from './auth'
 import Login from './views/Login'
 import DSRList from './views/DSRList'
@@ -182,8 +182,33 @@ function AccessDenied() {
 // ── App shell ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState<AuthSession | null>(() => getStoredSession())
+  const [booting, setBooting] = useState(true)
   const [route, setRoute] = useState<Route>({ page: 'dsr-list' })
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // Rehydrate the session from the stored token on first load.
+  useEffect(() => {
+    let active = true
+    restoreSession().then(s => {
+      if (!active) return
+      setSession(s)
+      setBooting(false)
+    })
+    return () => { active = false }
+  }, [])
+
+  if (booting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(145deg, #0c1f3f 0%, #0e7bb5 75%, #29a8dc 100%)' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+          <p className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>
+            Connecting to Square VM Cloud…
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (!session) {
     return <Login onLogin={s => setSession(s)} />

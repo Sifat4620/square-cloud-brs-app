@@ -1,39 +1,14 @@
-import type { DSR, Client, BackupTest, BackupEntry, StatusField, DSRStatus, TestStatus } from './types'
+// ── Data layer (API-backed) ─────────────────────────────────────────────────────
+// All persistence now goes through the Laravel API (./api). This module exposes
+// async CRUD helpers plus the pure UI helpers the forms still need. New records
+// carry a temporary UUID id; once the server responds we adopt its numeric id.
 
-// v2 key — new DSR structure; old v1 data is ignored
-const KEYS = {
-  dsrs:    'srs_dsrs_v2',
-  backups: 'srs_backups_v1',
-  clients: 'srs_clients_v1',
-}
+import * as api from './api'
+import type {
+  DSR, Client, BackupTest, BackupEntry, StatusField, DSRStatus, TestStatus,
+} from './types'
 
-const DEFAULT_CLIENT_NAMES = [
-  'Meghna Denim', 'NZ Group', 'DataSoft', 'Jovision', 'Mir Cloud',
-  'Initvent Software', 'Databiz', 'Onnorokom', 'Sunlife Insurance',
-  'STL', 'SFBL', 'SPL', 'UPHCS', 'Dept. Fisheries', 'Silicon ICT',
-  'Saibonsoft', 'Dept. of Livestock',
-]
-
-const DEFAULT_CLIENTS: Client[] = DEFAULT_CLIENT_NAMES.map((name, i) => ({
-  id: `default_${i.toString().padStart(2, '0')}`,
-  name,
-  active: true,
-  createdAt: '2025-01-01',
-}))
-
-function load<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function save<T>(key: string, value: T): void {
-  localStorage.setItem(key, JSON.stringify(value))
-}
-
+// ── Pure helpers used by the forms (not persisted) ───────────────────────────────
 export function ef(): StatusField {
   return { status: 'OK' as DSRStatus, value: '', remarks: '' }
 }
@@ -59,75 +34,70 @@ export function emptyDSR(date: string): DSR {
   }
 }
 
-// ── DSR CRUD ──────────────────────────────────────────────────────────────────
-export function getDSRs(): DSR[] { return load<DSR[]>(KEYS.dsrs, []) }
-
-export function upsertDSR(dsr: DSR): void {
-  const all = getDSRs()
-  const idx = all.findIndex(d => d.id === dsr.id)
-  if (idx >= 0) all[idx] = dsr; else all.push(dsr)
-  save(KEYS.dsrs, all)
-}
-
-export function deleteDSR(id: string): void {
-  save(KEYS.dsrs, getDSRs().filter(d => d.id !== id))
-}
-
-// ── Client CRUD ───────────────────────────────────────────────────────────────
-export function getClients(): Client[] {
-  const stored = load<Client[] | null>(KEYS.clients, null)
-  if (!stored) { save(KEYS.clients, DEFAULT_CLIENTS); return DEFAULT_CLIENTS }
-  return stored
-}
-
-export function upsertClient(client: Client): void {
-  const all = getClients()
-  const idx = all.findIndex(c => c.id === client.id)
-  if (idx >= 0) all[idx] = client; else all.push(client)
-  save(KEYS.clients, all)
-}
-
-// ── Backup CRUD ───────────────────────────────────────────────────────────────
-export function getBackups(): BackupTest[] { return load<BackupTest[]>(KEYS.backups, []) }
-
-export function upsertBackup(bt: BackupTest): void {
-  const all = getBackups()
-  const idx = all.findIndex(b => b.id === bt.id)
-  if (idx >= 0) all[idx] = bt; else all.push(bt)
-  save(KEYS.backups, all)
-}
-
-export function deleteBackup(id: string): void {
-  save(KEYS.backups, getBackups().filter(b => b.id !== id))
-}
-
-export function newBackupTest(year: number, month: number): BackupTest {
-  const clients = getClients().filter(c => c.active)
-  const now = new Date().toISOString()
-  const entries: BackupEntry[] = clients.map(c => ({
-    clientId: c.id,
-    clientName: c.name,
-    logsStatus: 'OK',
-    testStatus: 'OK' as TestStatus,
-    remarks: '',
-  }))
-  return {
-    id: crypto.randomUUID(),
-    year, month,
-    state: 'Pending',
-    responsibleName: '',
-    responsibleDesignation: '',
-    date: '',
-    signature: '',
-    entries,
-    createdAt: now,
-    updatedAt: now,
-  }
-}
-
 export const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
 export const YEARS = [2025, 2026, 2027, 2028, 2029]
+
+// ── DSR CRUD ──────────────────────────────────────────────────────────────────────
+export async function getDSRs(params?: api.DsrListParams): Promise<DSR[]> {
+  return api.listDsrs(params)
+}
+
+export async function getDSR(id: string): Promise<DSR | null> {
+  try {
+    return await api.getDsr(id)
+  } catch {
+    return null
+  }
+}
+
+export async function upsertDSR(dsr: DSR): Promise<DSR> {
+  // Local drafts use a UUID id; server records use numeric ids.
+  const isNew = !/^\d+$/.test(dsr.id)
+  return isNew ? api.createDsr(dsr) : api.updateDsr(dsr.id, dsr)
+}
+
+export async function deleteDSR(id: string): Promise<void> {
+  return api.deleteDsr(id)
+}
+
+// ── Client CRUD ────────────────────────────────────────────────────────────────────
+export async function getClients(): Promise<Client[]> {
+  return api.listClients()
+}
+
+export async function upsertClient(client: Client): Promise<Client> {
+  return /^\d+$/.test(client.id)
+    ? api.updateClient(client.id, { name: client.name, active: client.active })
+    : api.createClient({ name: client.name, active: client.active })
+}
+
+// ── Backup CRUD ────────────────────────────────────────────────────────────────────
+export async function getBackups(params?: api.BackupListParams): Promise<BackupTest[]> {
+  return api.listBackups(params)
+}
+
+export async function getBackup(id: string): Promise<BackupTest> {
+  return api.getBackup(id)
+}
+
+export async function upsertBackup(bt: BackupTest): Promise<BackupTest> {
+  return /^\d+$/.test(bt.id)
+    ? api.updateBackup(bt.id, bt)
+    : api.createBackup(bt)
+}
+
+export async function deleteBackup(id: string): Promise<void> {
+  return api.deleteBackup(id)
+}
+
+/** Create a draft monthly backup test (one entry per active client) on the server. */
+export async function newBackupTest(year: number, month: number): Promise<BackupTest> {
+  return api.createBackupTest(year, month)
+}
+
+// Re-export so views keep importing TestStatus/BackupEntry types if needed.
+export type { BackupEntry, TestStatus }

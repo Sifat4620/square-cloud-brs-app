@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
-import { getAppUsers, upsertAppUser, deleteAppUser, PAGE_DEFS } from '../auth'
-import type { AppUser, PageKey } from '../auth'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { PAGE_DEFS } from '../auth'
+import type { PageKey } from '../auth'
+import { listUsers, createUser, updateUser, deleteUser, ApiError } from '../api'
+import type { ManagedUser } from '../types'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function initials(name: string) {
@@ -66,8 +68,8 @@ function UserModal({
   onSave,
   onClose,
 }: {
-  editing: AppUser | null
-  onSave: (user: AppUser) => void
+  editing: ManagedUser | null
+  onSave: (data: { username: string; displayName: string; roleName: string; password: string; pages: PageKey[]; active: boolean }) => Promise<void>
   onClose: () => void
 }) {
   const isNew = !editing
@@ -107,7 +109,7 @@ function UserModal({
     })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     if (!username.trim())     return setError('Username is required.')
@@ -116,23 +118,19 @@ function UserModal({
     if (isNew && !password.trim()) return setError('Password is required for new users.')
     if (pages.length === 0)   return setError('Assign at least one page access.')
 
-    // Check username uniqueness on create
-    if (isNew) {
-      const existing = getAppUsers().find(u => u.username.toLowerCase() === username.trim().toLowerCase())
-      if (existing) return setError('Username already exists.')
+    try {
+      await onSave({
+        username:    username.trim().toLowerCase(),
+        displayName: displayName.trim(),
+        roleName:    roleName.trim(),
+        password:    password.trim(),
+        pages,
+        active,
+      })
+      onClose()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to save user.')
     }
-
-    const user: AppUser = {
-      id:          editing?.id ?? crypto.randomUUID(),
-      username:    username.trim().toLowerCase(),
-      password:    password.trim() || editing?.password || '',
-      displayName: displayName.trim(),
-      roleName:    roleName.trim(),
-      pages,
-      active,
-      createdAt:   editing?.createdAt ?? new Date().toISOString().split('T')[0],
-    }
-    onSave(user)
   }
 
   const inputStyle: React.CSSProperties = {
@@ -352,28 +350,64 @@ function UserModal({
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 export default function UserMgmt() {
-  const [users, setUsers]         = useState<AppUser[]>(() => getAppUsers())
-  const [modal, setModal]         = useState<'new' | AppUser | null>(null)
+  const [users, setUsers]         = useState<ManagedUser[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
+  const [modal, setModal]         = useState<'new' | ManagedUser | null>(null)
   const [filterRole, setFilterRole] = useState('')
   const [search, setSearch]       = useState('')
 
-  const refresh = () => setUsers(getAppUsers())
+  const refresh = useCallback(() => {
+    setLoading(true)
+    listUsers()
+      .then(list => { setUsers(list); setError('') })
+      .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load users.'))
+      .finally(() => setLoading(false))
+  }, [])
 
-  const handleSave = (user: AppUser) => {
-    upsertAppUser(user)
+  useEffect(() => { refresh() }, [refresh])
+
+  const handleSave = async (data: { username: string; displayName: string; roleName: string; password: string; pages: PageKey[]; active: boolean }) => {
+    if (modal === 'new') {
+      await createUser({
+        username: data.username,
+        displayName: data.displayName,
+        roleName: data.roleName,
+        password: data.password,
+        pages: data.pages,
+        active: data.active,
+      })
+    } else {
+      const id = (modal as ManagedUser).id
+      const payload: { displayName: string; roleName: string; pages: PageKey[]; active: boolean; password?: string } = {
+        displayName: data.displayName,
+        roleName: data.roleName,
+        pages: data.pages,
+        active: data.active,
+      }
+      if (data.password) payload.password = data.password
+      await updateUser(id, payload)
+    }
     refresh()
-    setModal(null)
   }
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return
-    deleteAppUser(id)
-    refresh()
+    try {
+      await deleteUser(id)
+      refresh()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to delete user.')
+    }
   }
 
-  const handleToggleActive = (user: AppUser) => {
-    upsertAppUser({ ...user, active: !user.active })
-    refresh()
+  const handleToggleActive = async (user: ManagedUser) => {
+    try {
+      await updateUser(user.id, { active: !user.active })
+      refresh()
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to update user.')
+    }
   }
 
   const allRoles = useMemo(() => [...new Set(users.map(u => u.roleName).filter(Boolean))], [users])
@@ -395,6 +429,14 @@ export default function UserMgmt() {
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
+      {error && (
+        <div className="rounded-xl px-4 py-3 text-sm font-semibold" style={{ backgroundColor: '#fff1f2', border: '1px solid #fecdd3', color: '#dc2626' }}>
+          {error}
+        </div>
+      )}
+      {loading && (
+        <p className="text-xs" style={{ color: '#94a3b8', fontFamily: "'DM Mono', monospace" }}>Loading users…</p>
+      )}
       {/* Modal */}
       {modal !== null && (
         <UserModal

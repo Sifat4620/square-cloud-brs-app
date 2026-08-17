@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react'
-import { getDSRs, upsertDSR, emptyDSR, MONTHS } from '../store'
+import { useState, useCallback, useEffect } from 'react'
+import { getDSR, upsertDSR, emptyDSR, MONTHS } from '../store'
+import { ApiError } from '../api'
 import type { Route } from '../App'
 import type { DSR, StatusField, DSRStatus, DSRState } from '../types'
 import logoSrc from '@/imports/logocloud_upscaled.png'
@@ -257,28 +258,57 @@ interface Props {
 }
 
 export default function DSRForm({ id, onNavigate, isAdmin }: Props) {
-  const [dsr, setDsr] = useState<DSR>(() => {
-    if (id) {
-      const found = getDSRs().find(d => d.id === id)
-      if (found) return found
-    }
-    return emptyDSR(new Date().toISOString().split('T')[0])
-  })
-
+  const [dsr, setDsr] = useState<DSR | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const isReadOnly = dsr.state !== 'Draft' || !isAdmin
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    const today = new Date().toISOString().split('T')[0]
+    if (id) {
+      getDSR(id)
+        .then(found => {
+          if (!active) return
+          setDsr(found ?? emptyDSR(today))
+          setError(found ? '' : 'DSR not found.')
+        })
+        .catch(err => { if (active) setError(err instanceof ApiError ? err.message : 'Failed to load DSR.') })
+        .finally(() => { if (active) setLoading(false) })
+    } else {
+      setDsr(emptyDSR(today))
+      setLoading(false)
+    }
+    return () => { active = false }
+  }, [id])
+
+  const isReadOnly = !dsr || dsr.state !== 'Draft' || !isAdmin
 
   const updateField = useCallback((path: string[], update: Partial<StatusField>) => {
-    setDsr(prev => setDeep(prev, path, update))
+    setDsr(prev => prev ? setDeep(prev, path, update) : prev)
   }, [])
 
-  const handleSave = (newState?: DSRState) => {
+  const handleSave = async (newState?: DSRState) => {
+    if (!dsr) return
     setSaving(true)
-    const updated: DSR = { ...dsr, state: newState || dsr.state, updatedAt: new Date().toISOString() }
-    upsertDSR(updated)
-    setDsr(updated)
-    setSaving(false)
-    if (newState === 'Approved') onNavigate({ page: 'dsr-list' })
+    try {
+      const updated: DSR = { ...dsr, state: newState || dsr.state, updatedAt: new Date().toISOString() }
+      const saved = await upsertDSR(updated)
+      setDsr(saved)
+      if (newState === 'Approved') onNavigate({ page: 'dsr-list' })
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to save DSR.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="p-6 text-sm" style={{ color: 'var(--text3)' }}>Loading report…</div>
+  }
+  if (!dsr) {
+    return <div className="p-6 text-sm" style={{ color: 'var(--text3)' }}>{error || 'DSR not found.'}</div>
   }
 
   const monthLabel = MONTHS[parseInt(dsr.date.split('-')[1] || '1') - 1] || ''

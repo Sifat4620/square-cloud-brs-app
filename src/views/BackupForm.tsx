@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
-import { getBackups, upsertBackup, newBackupTest, MONTHS, YEARS } from '../store'
+import { useState, useMemo, useEffect } from 'react'
+import { getBackup, getBackups, upsertBackup, newBackupTest, MONTHS, YEARS } from '../store'
+import { ApiError } from '../api'
 import type { Route } from '../App'
 import type { BackupTest, BackupState, TestStatus, BackupEntry } from '../types'
 
@@ -82,31 +83,52 @@ export default function BackupForm({ id, onNavigate, isAdmin }: Props) {
   const [newYear, setNewYear]   = useState(new Date().getFullYear())
   const [newMonth, setNewMonth] = useState(new Date().getMonth() + 1)
 
-  const [bt, setBt] = useState<BackupTest | null>(() => {
-    if (id) return getBackups().find(b => b.id === id) || null
-    return null
-  })
+  const [bt, setBt] = useState<BackupTest | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    if (!id) { setLoading(false); return }
+    setLoading(true)
+    getBackup(id)
+      .then(found => { if (active) { setBt(found); setError(found ? '' : 'Backup test not found.') } })
+      .catch(err => { if (active) setError(err instanceof ApiError ? err.message : 'Failed to load backup test.') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [id])
 
   const isNew      = !id && !bt && isAdmin
   const isReadOnly = bt ? (bt.state !== 'Pending' || !isAdmin) : true
 
-  const handleCreate = () => {
-    const existing = getBackups().find(b => b.year === newYear && b.month === newMonth)
-    if (existing) {
-      alert(`A backup test for ${MONTHS[newMonth - 1]} ${newYear} already exists.`)
-      return
+  const handleCreate = async () => {
+    setLoading(true)
+    try {
+      const all = await getBackups()
+      const existing = all.find(b => b.year === newYear && b.month === newMonth)
+      if (existing) {
+        alert(`A backup test for ${MONTHS[newMonth - 1]} ${newYear} already exists.`)
+        return
+      }
+      const fresh = await newBackupTest(newYear, newMonth)
+      setBt(fresh)
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to create backup test.')
+    } finally {
+      setLoading(false)
     }
-    const fresh = newBackupTest(newYear, newMonth)
-    upsertBackup(fresh)
-    setBt(fresh)
   }
 
-  const handleSave = (newState?: BackupState) => {
+  const handleSave = async (newState?: BackupState) => {
     if (!bt) return
-    const updated: BackupTest = { ...bt, state: newState || bt.state, updatedAt: new Date().toISOString() }
-    upsertBackup(updated)
-    setBt(updated)
-    if (newState === 'Approved') onNavigate({ page: 'backup-list' })
+    try {
+      const updated: BackupTest = { ...bt, state: newState || bt.state, updatedAt: new Date().toISOString() }
+      const saved = await upsertBackup(updated)
+      setBt(saved)
+      if (newState === 'Approved') onNavigate({ page: 'backup-list' })
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to save backup test.')
+    }
   }
 
   const updateEntry = (idx: number, update: Partial<BackupEntry>) => {
@@ -136,6 +158,11 @@ export default function BackupForm({ id, onNavigate, isAdmin }: Props) {
       na:      bt.entries.filter(e => e.testStatus === 'N/A').length,
     }
   }, [bt])
+
+  // ── Loading ───────────────────────────────────────────────────────────────────
+  if (loading) {
+    return <div className="p-6 text-sm" style={{ color: 'var(--text3)' }}>Loading…</div>
+  }
 
   // ── No record ────────────────────────────────────────────────────────────────
   if (!id && !bt && !isAdmin) {
@@ -188,7 +215,7 @@ export default function BackupForm({ id, onNavigate, isAdmin }: Props) {
   }
 
   if (!bt) {
-    return <div className="p-6 text-sm" style={{ color: 'var(--text3)' }}>Backup test not found.</div>
+    return <div className="p-6 text-sm" style={{ color: 'var(--text3)' }}>{error || 'Backup test not found.'}</div>
   }
 
   const passRate = bt.entries.length > 0 ? Math.round((stats.ok / bt.entries.length) * 100) : 0

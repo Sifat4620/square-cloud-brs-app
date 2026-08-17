@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { login } from '../auth'
 import type { AuthSession } from '../auth'
+import { ApiError } from '../api'
 import logoSrc from '@/imports/logocloud_upscaled.png'
 
 interface Props {
@@ -14,19 +15,17 @@ export default function Login({ onLogin }: Props) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
-    setTimeout(() => {
-      const user = login(username.trim(), password)
-      if (user) {
-        onLogin(user)
-      } else {
-        setError('Invalid username or password.')
-        setLoading(false)
-      }
-    }, 400)
+    try {
+      const user = await login(username.trim(), password)
+      onLogin(user)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Invalid username or password.')
+      setLoading(false)
+    }
   }
 
   const fill = (u: string, p: string) => { setUsername(u); setPassword(p); setError('') }
