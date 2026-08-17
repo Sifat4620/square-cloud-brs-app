@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { getDSRs, deleteDSR, MONTHS, YEARS } from '../store'
 import type { Route } from '../App'
 import type { DSR, DSRState } from '../types'
+import logoSrc from '@/imports/logocloud_upscaled.png'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function countFaults(dsr: DSR): number {
@@ -142,6 +143,177 @@ function ReportModal({ dsrs, onClose }: { dsrs: DSR[]; onClose: () => void }) {
   )
 }
 
+// ── Today's DSR panel ─────────────────────────────────────────────────────────
+function TodayPanel({ dsr, onView, onNew, isAdmin }: {
+  dsr: DSR | null
+  onView: () => void
+  onNew: () => void
+  isAdmin: boolean
+}) {
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const hasFault = dsr ? countFaults(dsr) > 0 : false
+  const allOk = dsr && !hasFault
+
+  const sectionSummary = dsr ? [
+    { label: 'Uplinks',     ok: Object.values(dsr.uplinks).every(f => f.status === 'OK' || f.status === 'N/A') },
+    { label: 'P2P',         ok: Object.values(dsr.p2p).every(f => f.status === 'OK' || f.status === 'N/A') },
+    { label: 'Firewall',    ok: Object.values(dsr.firewall).every(f => f.status === 'OK' || f.status === 'N/A') },
+    { label: 'KB',          ok: Object.values(dsr.kb).every(f => f.status === 'OK' || f.status === 'N/A') },
+    { label: 'CHQ',         ok: Object.values(dsr.chq).every(f => f.status === 'OK' || f.status === 'N/A') },
+    { label: 'UPS',         ok: Object.values(dsr.ups).every(f => f.status === 'OK' || f.status === 'N/A') },
+    { label: 'Cooling',     ok: Object.values(dsr.cooling).every(f => f.status === 'OK' || f.status === 'N/A') },
+  ] : []
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: allOk
+          ? 'linear-gradient(135deg, #052e16 0%, #14532d 50%, #166534 100%)'
+          : hasFault
+          ? 'linear-gradient(135deg, #450a0a 0%, #7f1d1d 50%, #991b1b 100%)'
+          : 'linear-gradient(135deg, #0c1929 0%, #0f2236 50%, #1e3a5f 100%)',
+        boxShadow: allOk
+          ? '0 8px 32px rgba(22,101,52,0.35)'
+          : hasFault
+          ? '0 8px 32px rgba(153,27,27,0.35)'
+          : '0 8px 32px rgba(15,23,42,0.25)',
+      }}
+    >
+      <div className="px-6 py-5 flex items-center justify-between flex-wrap gap-4">
+        {/* Left: status */}
+        <div className="flex items-center gap-4">
+          {/* Pulse dot */}
+          <div className="relative flex-shrink-0">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center"
+              style={{
+                background: allOk ? 'rgba(74,222,128,0.18)' : hasFault ? 'rgba(248,113,113,0.18)' : 'rgba(148,163,184,0.12)',
+                border: `2px solid ${allOk ? 'rgba(74,222,128,0.4)' : hasFault ? 'rgba(248,113,113,0.4)' : 'rgba(148,163,184,0.2)'}`,
+              }}
+            >
+              {allOk ? (
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                  <path d="M6 14l6 6 10-10" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : hasFault ? (
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                  <path d="M14 9v6M14 18h.01" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" />
+                  <circle cx="14" cy="14" r="11" stroke="#f87171" strokeWidth="2" />
+                </svg>
+              ) : (
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                  <path d="M14 9v6M14 18h.01" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" />
+                  <circle cx="14" cy="14" r="11" stroke="#94a3b8" strokeWidth="2" />
+                </svg>
+              )}
+            </div>
+            {allOk && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-green-400 animate-pulse" style={{ boxShadow: '0 0 8px #4ade80' }} />
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.7)', fontFamily: "'DM Mono', monospace" }}>
+                Today's Report
+              </p>
+              {dsr && (
+                <span
+                  className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  style={{
+                    backgroundColor: dsr.state === 'Approved' ? 'rgba(74,222,128,0.15)' : dsr.state === 'Submitted' ? 'rgba(147,197,253,0.15)' : 'rgba(253,224,71,0.15)',
+                    color: dsr.state === 'Approved' ? '#4ade80' : dsr.state === 'Submitted' ? '#93c5fd' : '#fde047',
+                    border: `1px solid ${dsr.state === 'Approved' ? 'rgba(74,222,128,0.3)' : dsr.state === 'Submitted' ? 'rgba(147,197,253,0.3)' : 'rgba(253,224,71,0.3)'}`,
+                  }}
+                >
+                  {dsr.state}
+                </span>
+              )}
+            </div>
+            <h3 className="text-2xl font-extrabold leading-tight" style={{ color: allOk ? '#bbf7d0' : hasFault ? '#fca5a5' : '#e2e8f0' }}>
+              {!dsr ? 'No DSR Filed Yet' : allOk ? 'All Systems OK' : `${countFaults(dsr)} Fault${countFaults(dsr) !== 1 ? 's' : ''} Detected`}
+            </h3>
+            <p className="text-xs mt-1" style={{ color: 'rgba(148,163,184,0.6)', fontFamily: "'DM Mono', monospace" }}>
+              {today}
+            </p>
+          </div>
+        </div>
+
+        {/* Centre: section pills */}
+        {dsr && (
+          <div className="flex flex-wrap gap-1.5">
+            {sectionSummary.map(s => (
+              <span
+                key={s.label}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold"
+                style={{
+                  backgroundColor: s.ok ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.15)',
+                  border: `1px solid ${s.ok ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.3)'}`,
+                  color: s.ok ? '#86efac' : '#fca5a5',
+                }}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${s.ok ? 'bg-green-400' : 'bg-red-400'}`} />
+                {s.label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Right: action */}
+        <div className="flex-shrink-0">
+          {dsr ? (
+            <button
+              onClick={onView}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:opacity-90"
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.12)',
+                border: '1px solid rgba(255,255,255,0.18)',
+                color: '#f1f5f9',
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              View Report
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ) : isAdmin ? (
+            <button
+              onClick={onNew}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all hover:opacity-90"
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.12)',
+                border: '1px solid rgba(255,255,255,0.18)',
+                color: '#f1f5f9',
+              }}
+            >
+              + Create Today's DSR
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Prepared by strip */}
+      {dsr?.name && (
+        <div
+          className="px-6 py-2.5 flex items-center gap-2"
+          style={{ backgroundColor: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.07)' }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ color: 'rgba(148,163,184,0.6)' }}>
+            <circle cx="6" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M1.5 11c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          <span className="text-xs" style={{ color: 'rgba(148,163,184,0.6)' }}>
+            Prepared by <strong style={{ color: 'rgba(226,232,240,0.8)' }}>{dsr.name}</strong>
+            {dsr.signature && <span> · Signed: <strong style={{ color: 'rgba(226,232,240,0.8)' }}>{dsr.signature}</strong></span>}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 interface Props {
   onNavigate: (route: Route) => void
@@ -156,6 +328,11 @@ export default function DSRList({ onNavigate, isAdmin }: Props) {
   const [tick, setTick] = useState(0)
 
   const all = useMemo(() => getDSRs(), [tick])
+
+  const todayDsr = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    return all.find(d => d.date === today) || null
+  }, [all])
 
   const filtered = useMemo(
     () =>
@@ -190,6 +367,14 @@ export default function DSRList({ onNavigate, isAdmin }: Props) {
   return (
     <div className="p-6 space-y-6">
       {showReport && <ReportModal dsrs={filtered} onClose={() => setShowReport(false)} />}
+
+      {/* Today's report */}
+      <TodayPanel
+        dsr={todayDsr}
+        onView={() => onNavigate({ page: 'dsr-form', id: todayDsr!.id })}
+        onNew={() => onNavigate({ page: 'dsr-form' })}
+        isAdmin={isAdmin}
+      />
 
       {/* Stat tiles */}
       <div className="grid grid-cols-4 gap-4">

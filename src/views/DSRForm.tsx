@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { getDSRs, upsertDSR, emptyDSR, MONTHS } from '../store'
 import type { Route } from '../App'
 import type { DSR, StatusField, DSRStatus, DSRState } from '../types'
+import logoSrc from '@/imports/logocloud_upscaled.png'
 
 const STATUS_OPTIONS: DSRStatus[] = ['OK', 'FAULT', 'DEGRADED', 'MAINTENANCE', 'N/A']
 
@@ -98,6 +99,81 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle: s
         <span className="text-xs" style={{ color: 'var(--text3)' }}>{subtitle}</span>
       </div>
       {children}
+    </div>
+  )
+}
+
+// ── Print-only letterhead (hidden on screen) ──────────────────────────────────
+function PrintLetterhead({ dsr, monthLabel, yearLabel }: { dsr: DSR; monthLabel: string; yearLabel: string }) {
+  const faultCount = (() => {
+    let n = 0
+    const sections = [dsr.uplinks, dsr.p2p, dsr.firewall, dsr.kb, dsr.chq, dsr.ups, dsr.cooling] as Record<string, { status: string }>[]
+    for (const s of sections) for (const f of Object.values(s)) if (f.status === 'FAULT' || f.status === 'DEGRADED') n++
+    return n
+  })()
+  return (
+    <div className="print-only" style={{ display: 'none' }}>
+      {/* Top bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '3px solid #1e3a5f', paddingBottom: '14px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <img src={logoSrc} alt="Square VM Cloud" style={{ height: '64px', width: 'auto' }} />
+          <div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: '#0c1929', lineHeight: 1.1 }}>Square VM Cloud</div>
+            <div style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace', marginTop: '2px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Network &amp; Infrastructure Services</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#0c1929' }}>Daily Status Report</div>
+          <div style={{ fontSize: '11px', color: '#0369a1', fontFamily: 'monospace', marginTop: '3px' }}>{monthLabel} {yearLabel} · {dsr.date}</div>
+          <div style={{
+            display: 'inline-block', marginTop: '6px', padding: '2px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 700,
+            color: dsr.state === 'Approved' ? '#166534' : dsr.state === 'Submitted' ? '#1e40af' : '#92400e',
+            backgroundColor: dsr.state === 'Approved' ? '#f0fdf4' : dsr.state === 'Submitted' ? '#eff6ff' : '#fef3c7',
+            border: `1px solid ${dsr.state === 'Approved' ? '#bbf7d0' : dsr.state === 'Submitted' ? '#bfdbfe' : '#fde68a'}`,
+          }}>
+            {dsr.state}
+          </div>
+        </div>
+      </div>
+      {/* Meta row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px', marginBottom: '16px', padding: '12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+        {[
+          { label: 'Prepared By', value: dsr.name || '—' },
+          { label: 'Signature',   value: dsr.signature || '—' },
+          { label: 'Report Date', value: dsr.date || '—' },
+          { label: 'System Status', value: faultCount === 0 ? '✓ All Systems OK' : `${faultCount} Fault(s) Detected` },
+        ].map(f => (
+          <div key={f.label}>
+            <div style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#94a3b8', fontFamily: 'monospace', marginBottom: '3px' }}>{f.label}</div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: f.label === 'System Status' ? (faultCount === 0 ? '#166534' : '#991b1b') : '#0f172a' }}>{f.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Print-only footer ─────────────────────────────────────────────────────────
+function PrintFooter({ dsr }: { dsr: DSR }) {
+  return (
+    <div className="print-only" style={{ display: 'none', marginTop: '24px', paddingTop: '14px', borderTop: '1px solid #e2e8f0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '24px' }}>
+        {[
+          { label: 'Prepared By', value: dsr.name, line: true },
+          { label: 'Signature',   value: dsr.signature, line: true },
+          { label: 'Designation', value: '', line: true },
+          { label: 'Date',        value: dsr.date, line: false },
+        ].map(f => (
+          <div key={f.label} style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{f.value || ''}</div>
+            <div style={{ borderBottom: '1px solid #0f172a', marginBottom: '4px', height: '1px' }} />
+            <div style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', fontFamily: 'monospace' }}>{f.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: '14px', textAlign: 'center', fontSize: '8px', color: '#94a3b8', fontFamily: 'monospace' }}>
+        Square VM Cloud · DSR Management System · Generated {new Date().toLocaleString('en-GB')}
+      </div>
     </div>
   )
 }
@@ -210,6 +286,9 @@ export default function DSRForm({ id, onNavigate, isAdmin }: Props) {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-5 print-page">
+      {/* Print-only letterhead — hidden on screen, shown when printing */}
+      <PrintLetterhead dsr={dsr} monthLabel={monthLabel} yearLabel={yearLabel} />
+
       {/* Toolbar */}
       <div className="flex items-center justify-between no-print">
         <button
@@ -349,6 +428,9 @@ export default function DSRForm({ id, onNavigate, isAdmin }: Props) {
           <Btn onClick={() => handleSave('Submitted')} disabled={saving} primary>Submit DSR</Btn>
         </div>
       )}
+
+      {/* Print-only signature footer */}
+      <PrintFooter dsr={dsr} />
     </div>
   )
 }

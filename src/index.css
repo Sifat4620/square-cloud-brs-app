@@ -40,40 +40,115 @@ textarea {
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 15mm 14mm 15mm 14mm;
+  }
+
   body {
     background: white !important;
     color: black !important;
-    font-size: 11px;
+    font-size: 10.5px;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
   }
-  .no-print {
-    display: none !important;
-  }
+
+  /* ── Hide all UI chrome ── */
+  .no-print,
   aside,
-  header {
+  header,
+  nav {
     display: none !important;
   }
+
+  /* ── Show print-only blocks ── */
+  .print-only {
+    display: block !important;
+  }
+
+  /* ── Screen-only header card: hide on print (letterhead replaces it) ── */
+  .print-page > .print-card:first-of-type {
+    display: none !important;
+  }
+
   .print-page {
     padding: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
   }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-  }
-  th,
-  td {
-    border: 1px solid #ddd !important;
-    padding: 5px 8px !important;
-    color: black !important;
-    background: white !important;
-  }
+
+  /* ── Section cards ── */
   .print-card {
-    border: 1px solid #ddd !important;
+    border: 1px solid #cbd5e1 !important;
     background: white !important;
-    margin-bottom: 14px;
+    border-radius: 6px !important;
+    margin-bottom: 10px !important;
     page-break-inside: avoid;
-    padding: 12px !important;
+    overflow: visible !important;
   }
-  /* Report modal print: show report body, hide chrome */
+
+  /* ── Tables ── */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  thead tr {
+    background-color: #f1f5f9 !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    color: #475569 !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    padding: 6px 10px !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  td {
+    border: 1px solid #e2e8f0 !important;
+    padding: 5px 10px !important;
+    color: #1e293b !important;
+    background: white !important;
+    font-size: 10px !important;
+  }
+
+  /* Status pills in print */
+  span[style*='border-radius'] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── Section card headers ── */
+  .print-card > div:first-child {
+    background-color: #f8fafc !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    padding: 7px 12px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── Remarks textarea ── */
+  textarea {
+    border: 1px solid #e2e8f0 !important;
+    background: white !important;
+    min-height: 48px !important;
+    font-size: 10px !important;
+  }
+
+  /* ── Preserve colors for status indicators ── */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── Report modal print ── */
+  .fixed.inset-0 {
+    position: static !important;
+    background: none !important;
+  }
   .fixed.inset-0 > div {
     position: static !important;
     max-height: none !important;
@@ -82,7 +157,6 @@ textarea {
     box-shadow: none !important;
     width: 100% !important;
   }
-  /* Hide modal header/footer chrome, show only report body */
   .fixed.inset-0 > div > div:first-child,
   .fixed.inset-0 > div > div:nth-child(2),
   .fixed.inset-0 > div > div:last-child {
